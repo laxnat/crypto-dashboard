@@ -24,6 +24,17 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
+// Runs before React hydrates — prevents flash of wrong theme
+const themeScript = `
+  try {
+    const saved = localStorage.getItem('crypto-dashboard-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (saved === 'dark' || (!saved && prefersDark)) {
+      document.documentElement.classList.add('dark');
+    }
+  } catch {}
+`;
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -32,6 +43,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
         {children}
