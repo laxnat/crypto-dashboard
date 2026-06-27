@@ -1,10 +1,19 @@
 import { useMemo, useState } from "react";
 import { useLoaderData, useNavigation } from "react-router";
-import { CryptoCard } from "../CryptoCard";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import type { DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
+import { SortableCryptoCard } from "../SortableCryptoCard";
 import { FilterInput } from "../FilterInput";
 import { COINS } from "../coins";
 import { isLoaderError } from "../types";
-import type { HomeLoaderResult } from "../types";
+import type { HomeLoaderResult, CoinRate } from "../types";
 
 export function meta() {
   return [
@@ -24,17 +33,12 @@ export async function loader(): Promise<HomeLoaderResult> {
     const json = await res.json();
     const rates: Record<string, string> = json.data.rates;
 
-    // rates[symbol] = how many of that coin per 1 USD
-    // e.g. rates["BTC"] = "0.0000152" means 1 USD = 0.0000152 BTC
     const btcPerUsd = parseFloat(rates["BTC"]);
 
     const coins = COINS.map((coin) => {
       const coinPerUsd = parseFloat(rates[coin.symbol]);
-      // USD price of 1 coin = 1 / (coins per USD)
       const usdRate = coinPerUsd > 0 ? 1 / coinPerUsd : 0;
-      // BTC price of 1 coin = (BTC per USD) / (coin per USD)
       const btcRate = btcPerUsd > 0 && coinPerUsd > 0 ? btcPerUsd / coinPerUsd : 0;
-
       return { ...coin, usdRate, btcRate };
     });
 
@@ -50,16 +54,44 @@ export default function Home() {
   const data = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading";
+
+  // Full order of all coins by symbol — source of truth for ordering
+  const [coinOrder, setCoinOrder] = useState<string[]>(() =>
+    isLoaderError(data) ? [] : data.coins.map((c) => c.symbol)
+  );
+
   const [filter, setFilter] = useState("");
 
-  const filteredCoins = useMemo(() => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    })
+  );
+
+  // Derive display list: apply order first, then filter
+  const filteredCoins = useMemo<CoinRate[]>(() => {
     if (isLoaderError(data)) return [];
-    if (!filter.trim()) return data.coins;
+    const ordered = coinOrder
+      .map((symbol) => data.coins.find((c) => c.symbol === symbol))
+      .filter((c): c is CoinRate => c !== undefined);
+
+    if (!filter.trim()) return ordered;
     const q = filter.toLowerCase();
-    return data.coins.filter(
+    return ordered.filter(
       (coin) => coin.name.toLowerCase().includes(q) || coin.symbol.toLowerCase().includes(q)
     );
-  }, [data, filter]);
+  }, [data, coinOrder, filter]);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    setCoinOrder((prev) => {
+      const oldIndex = prev.indexOf(active.id as string);
+      const newIndex = prev.indexOf(over.id as string);
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }
 
   if (isLoaderError(data)) {
     return (
@@ -109,11 +141,19 @@ export default function Home() {
             <p className="text-gray-400 text-sm">No results for &ldquo;{filter}&rdquo;</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredCoins.map((coin) => (
-              <CryptoCard key={coin.symbol} coin={coin} />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={coinOrder} strategy={rectSortingStrategy}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredCoins.map((coin) => (
+                  <SortableCryptoCard key={coin.symbol} coin={coin} />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
     </main>
