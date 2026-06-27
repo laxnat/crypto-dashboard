@@ -1,13 +1,22 @@
+import { clsx } from "clsx";
 import type { CoinRate } from "./types";
 import { formatUSD, formatBTC } from "./utils";
 
 interface CryptoCardProps {
   coin: CoinRate;
+  isDragging?: boolean;
 }
 
-export function CryptoCard({ coin }: CryptoCardProps) {
+export function CryptoCard({ coin, isDragging = false }: CryptoCardProps) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 cursor-default">
+    <div
+      className={clsx(
+        "bg-white border rounded-2xl p-5 shadow-sm transition-all duration-200 cursor-grab active:cursor-grabbing select-none",
+        isDragging
+          ? "border-blue-400 shadow-lg"
+          : "border-gray-200 hover:shadow-md hover:border-blue-200"
+      )}
+    >
       <div className="flex items-center gap-3 mb-4">
         <img
           src={coin.iconUrl}
