@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLoaderData, useNavigation, useRevalidator } from "react-router";
+import { Form, useLoaderData, useNavigation, useRevalidator } from "react-router";
 import {
   DndContext,
   closestCenter,
@@ -12,8 +12,10 @@ import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortab
 import { SortableCryptoCard } from "../SortableCryptoCard";
 import { FilterInput } from "../FilterInput";
 import { COINS } from "../coins";
+import { requireAuth } from "../session.server";
 import { isLoaderError } from "../types";
 import type { HomeLoaderResult, CoinRate } from "../types";
+import type { Route } from "./+types/home";
 
 const ORDER_KEY = "crypto-dashboard-order";
 const THEME_KEY = "crypto-dashboard-theme";
@@ -26,7 +28,8 @@ export function meta() {
   ];
 }
 
-export async function loader(): Promise<HomeLoaderResult> {
+export async function loader({ request }: Route.LoaderArgs): Promise<HomeLoaderResult> {
+  await requireAuth(request);
   try {
     const res = await fetch("https://api.coinbase.com/v2/exchange-rates?currency=USD");
 
@@ -193,6 +196,14 @@ export default function Home() {
                 </svg>
               )}
             </button>
+            <Form method="post" action="/logout">
+              <button
+                type="submit"
+                className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition"
+              >
+                Sign out
+              </button>
+            </Form>
           </div>
         </div>
 
