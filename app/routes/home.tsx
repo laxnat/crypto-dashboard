@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useLoaderData, useNavigation } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useLoaderData, useNavigation, useRevalidator } from "react-router";
 import {
   DndContext,
   closestCenter,
@@ -14,6 +14,9 @@ import { FilterInput } from "../FilterInput";
 import { COINS } from "../coins";
 import { isLoaderError } from "../types";
 import type { HomeLoaderResult, CoinRate } from "../types";
+
+const STORAGE_KEY = "crypto-dashboard-order";
+const REFRESH_INTERVAL_MS = 60_000;
 
 export function meta() {
   return [
@@ -53,22 +56,41 @@ export async function loader(): Promise<HomeLoaderResult> {
 export default function Home() {
   const data = useLoaderData<typeof loader>();
   const navigation = useNavigation();
-  const isLoading = navigation.state === "loading";
+  const revalidator = useRevalidator();
 
-  // Full order of all coins by symbol — source of truth for ordering
-  const [coinOrder, setCoinOrder] = useState<string[]>(() =>
-    isLoaderError(data) ? [] : data.coins.map((c) => c.symbol)
-  );
+  const isPageLoading = navigation.state === "loading";
+  const isRefreshing = revalidator.state === "loading";
+
+  const [coinOrder, setCoinOrder] = useState<string[]>(() => {
+    const defaultOrder = isLoaderError(data) ? [] : data.coins.map((c) => c.symbol);
+    // typeof window guard: localStorage is unavailable during SSR
+    if (typeof window === "undefined") return defaultOrder;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return defaultOrder;
+      const parsed = JSON.parse(saved) as string[];
+      const validSymbols = new Set(defaultOrder);
+      // Preserve saved order for known coins, append any newly added coins at the end
+      const filtered = parsed.filter((s) => validSymbols.has(s));
+      const missing = defaultOrder.filter((s) => !parsed.includes(s));
+      return [...filtered, ...missing];
+    } catch {
+      return defaultOrder;
+    }
+  });
 
   const [filter, setFilter] = useState("");
 
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    const id = setInterval(() => revalidator.revalidate(), REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [revalidator]);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
-  // Derive display list: apply order first, then filter
   const filteredCoins = useMemo<CoinRate[]>(() => {
     if (isLoaderError(data)) return [];
     const ordered = coinOrder
@@ -89,7 +111,9 @@ export default function Home() {
     setCoinOrder((prev) => {
       const oldIndex = prev.indexOf(active.id as string);
       const newIndex = prev.indexOf(over.id as string);
-      return arrayMove(prev, oldIndex, newIndex);
+      const next = arrayMove(prev, oldIndex, newIndex);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
     });
   }
 
@@ -113,12 +137,23 @@ export default function Home() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Crypto Dashboard</h1>
             <p className="text-sm text-gray-400 mt-1">
-              Updated {new Date(data.lastUpdated).toLocaleTimeString()}
+              {isRefreshing
+                ? "Refreshing..."
+                : `Updated ${new Date(data.lastUpdated).toLocaleTimeString()}`}
             </p>
           </div>
-          <span className="text-xs font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-            Live
-          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => revalidator.revalidate()}
+              disabled={isRefreshing}
+              className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              {isRefreshing ? "Refreshing..." : "Refresh"}
+            </button>
+            <span className="text-xs font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+              Live
+            </span>
+          </div>
         </div>
 
         {/* Filter */}
@@ -127,7 +162,7 @@ export default function Home() {
         </div>
 
         {/* Grid */}
-        {isLoading ? (
+        {isPageLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {Array.from({ length: 12 }).map((_, i) => (
               <div
