@@ -26,7 +26,7 @@ export function FilterInput({ value, onChange }: FilterInputProps) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label="Filter cryptocurrencies"
-        className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+        className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
       />
     </div>
   );

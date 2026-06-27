@@ -15,7 +15,8 @@ import { COINS } from "../coins";
 import { isLoaderError } from "../types";
 import type { HomeLoaderResult, CoinRate } from "../types";
 
-const STORAGE_KEY = "crypto-dashboard-order";
+const ORDER_KEY = "crypto-dashboard-order";
+const THEME_KEY = "crypto-dashboard-theme";
 const REFRESH_INTERVAL_MS = 60_000;
 
 export function meta() {
@@ -63,20 +64,23 @@ export default function Home() {
 
   const [coinOrder, setCoinOrder] = useState<string[]>(() => {
     const defaultOrder = isLoaderError(data) ? [] : data.coins.map((c) => c.symbol);
-    // typeof window guard: localStorage is unavailable during SSR
     if (typeof window === "undefined") return defaultOrder;
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(ORDER_KEY);
       if (!saved) return defaultOrder;
       const parsed = JSON.parse(saved) as string[];
       const validSymbols = new Set(defaultOrder);
-      // Preserve saved order for known coins, append any newly added coins at the end
       const filtered = parsed.filter((s) => validSymbols.has(s));
       const missing = defaultOrder.filter((s) => !parsed.includes(s));
       return [...filtered, ...missing];
     } catch {
       return defaultOrder;
     }
+  });
+
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return document.documentElement.classList.contains("dark");
   });
 
   const [filter, setFilter] = useState("");
@@ -86,6 +90,13 @@ export default function Home() {
     const id = setInterval(() => revalidator.revalidate(), REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
   }, [revalidator]);
+
+  function toggleTheme() {
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -112,16 +123,16 @@ export default function Home() {
       const oldIndex = prev.indexOf(active.id as string);
       const newIndex = prev.indexOf(over.id as string);
       const next = arrayMove(prev, oldIndex, newIndex);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(ORDER_KEY, JSON.stringify(next));
       return next;
     });
   }
 
   if (isLoaderError(data)) {
     return (
-      <main className="min-h-screen bg-gray-50 p-8">
+      <main className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600 text-sm">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-600 dark:text-red-400 text-sm">
             Error: {data.error}
           </div>
         </div>
@@ -130,12 +141,14 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-6xl mx-auto px-6 py-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Crypto Dashboard</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Crypto Dashboard
+            </h1>
             <p className="text-sm text-gray-400 mt-1">
               {isRefreshing
                 ? "Refreshing..."
@@ -146,13 +159,40 @@ export default function Home() {
             <button
               onClick={() => revalidator.revalidate()}
               disabled={isRefreshing}
-              className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
               {isRefreshing ? "Refreshing..." : "Refresh"}
             </button>
-            <span className="text-xs font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+            <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full">
               Live
             </span>
+            <button
+              onClick={toggleTheme}
+              aria-label="Toggle dark mode"
+              className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            >
+              {isDark ? (
+                // Sun icon
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"
+                  />
+                </svg>
+              ) : (
+                // Moon icon
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"
+                  />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
 
@@ -167,7 +207,7 @@ export default function Home() {
             {Array.from({ length: 12 }).map((_, i) => (
               <div
                 key={i}
-                className="bg-white border border-gray-200 rounded-2xl p-5 h-32 animate-pulse"
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-5 h-32 animate-pulse"
               />
             ))}
           </div>
