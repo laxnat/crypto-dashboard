@@ -37,7 +37,7 @@ export async function loader({ request }: Route.LoaderArgs): Promise<HomeLoaderR
       throw new Error(`Coinbase API responded with ${res.status}`);
     }
 
-    const json = await res.json();
+    const json = await res.json() as { data: { rates: Record<string, string> } };
     const rates: Record<string, string> = json.data.rates;
 
     const btcPerUsd = parseFloat(rates["BTC"]);
@@ -81,10 +81,11 @@ export default function Home() {
     }
   });
 
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return document.documentElement.classList.contains("dark");
-  });
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains("dark"));
+  }, []);
 
   const [filter, setFilter] = useState("");
 
